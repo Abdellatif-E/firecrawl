@@ -29,7 +29,9 @@ export async function scrapeController(
   const origin = req.body.origin;
   const timeout = req.body.timeout;
   const pageOptions = legacyScrapeOptions(req.body);
-  const extractorOptions = req.body.extract ? legacyExtractorOptions(req.body.extract) : undefined;
+  const extractorOptions = req.body.extract
+    ? legacyExtractorOptions(req.body.extract)
+    : undefined;
   const jobId = uuidv4();
 
   const startTime = new Date().getTime();
@@ -56,9 +58,36 @@ export async function scrapeController(
     jobPriority
   );
 
-  const totalWait = (req.body.waitFor ?? 0) + (req.body.actions ?? []).reduce((a,x) => (x.type === "wait" ? x.milliseconds : 0) + a, 0);
+  const totalWait =
+    (req.body.waitFor ?? 0) +
+    (req.body.actions ?? []).reduce(
+      (a, x) => (x.type === "wait" ? x.milliseconds : 0) + a,
+      0
+    );
 
   let doc: any | undefined;
+
+  Logger.info(`Job wait time: ${totalWait}`);
+  Logger.info(
+    `Job data: ${JSON.stringify({
+      url: req.body.url,
+      mode: "single_urls",
+      crawlerOptions: {},
+      team_id: req.auth.team_id,
+      plan: req.auth.plan,
+      pageOptions,
+      extractorOptions,
+      origin: req.body.origin,
+      is_scrape: true,
+    })}`
+  );
+
+  Logger.info(
+    `Job time check: ${(Date.now(), Date.now() + timeout)} ${
+      Date.now() >= Date.now() + timeout
+    }`
+  );
+
   try {
     doc = (await waitForJob(jobId, timeout + totalWait))[0];
   } catch (e) {
@@ -106,14 +135,18 @@ export async function scrapeController(
     // Don't bill if we're early returning
     return;
   }
-  if(req.body.extract && req.body.formats.includes("extract")) {
+  if (req.body.extract && req.body.formats.includes("extract")) {
     creditsToBeBilled = 5;
   }
 
-  billTeam(req.auth.team_id, req.acuc?.sub_id, creditsToBeBilled).catch(error => {
-    Logger.error(`Failed to bill team ${req.auth.team_id} for ${creditsToBeBilled} credits: ${error}`);
-    // Optionally, you could notify an admin or add to a retry queue here
-  });
+  billTeam(req.auth.team_id, req.acuc?.sub_id, creditsToBeBilled).catch(
+    (error) => {
+      Logger.error(
+        `Failed to bill team ${req.auth.team_id} for ${creditsToBeBilled} credits: ${error}`
+      );
+      // Optionally, you could notify an admin or add to a retry queue here
+    }
+  );
 
   if (!pageOptions || !pageOptions.includeRawHtml) {
     if (doc && doc.rawHtml) {
@@ -121,8 +154,8 @@ export async function scrapeController(
     }
   }
 
-  if(pageOptions && pageOptions.includeExtract) {
-    if(!pageOptions.includeMarkdown && doc && doc.markdown) {
+  if (pageOptions && pageOptions.includeExtract) {
+    if (!pageOptions.includeMarkdown && doc && doc.markdown) {
       delete doc.markdown;
     }
   }
